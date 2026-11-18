@@ -694,3 +694,183 @@ if "5" in allowed_stages:
     bindActiveRecording();
     </script>
     """, height=430)
+
+# ==============================================================================
+# 🛡️ STAGE 6: ULTIMATE RETAILER SHIELD (AUTO-UNLOCKS ONLY AT 100% SCORE)
+# ==============================================================================
+import io
+import csv
+
+st.write("")
+score_ready = (locals().get("percentage", 0) == 100)
+
+if not score_ready:
+    # LOCKED STATE (Jab tak upar ki sabhi conditions poori na hon)
+    st.markdown("""
+    <div style="background: #ECEFF1; padding: 16px 20px; border-radius: 12px; border: 2px dashed #78909C; text-align: center; margin-top: 10px;">
+        <h3 style="color: #455A64; font-size: 23px; font-weight: 800; margin: 0;">
+            🔒 STAGE 6: Ultimate Retailer Shield (LOCKED)
+        </h3>
+        <p style="color: #607D8B; font-size: 16px; font-weight: bold; margin: 6px 0 0 0;">
+            ⚠️ Pehle upar ke sabhi Rules (Stage 1 & Stage 2) tick karke 100% Discipline Score poora karein — tabhi yeh Shield Highlight aur Unlock hoga!
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # UNLOCKED & HIGHLIGHTED STATE (100% Rules Verified!)
+    st.markdown("""
+    <div style="background: linear-gradient(90deg, #FF6F00, #FFA000, #FFD600); padding: 16px 20px; border-radius: 14px; border: 3px solid #1B5E20; box-shadow: 0px 0px 18px rgba(255, 160, 0, 0.65); margin-top: 10px; margin-bottom: 12px;">
+        <h3 style="color: #1B5E20; font-size: 26px; font-weight: 900; margin: 0; text-align: center;">
+            🌟🛡️ STAGE 6: RETAILER SHIELD UNLOCKED & ACTIVE! 🛡️🌟
+        </h3>
+        <p style="color: #3E2723; font-size: 16px; font-weight: 800; margin: 5px 0 0 0; text-align: center;">
+            ✅ 100% Conditions Verified! Niche Dropdown kholkar Live Action Alert lein:
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("⚡ OPEN 4-IN-1 RETAILER SHIELD DROPDOWN (Live Alerts)", expanded=True):
+        shield_mode = st.selectbox(
+            "🔽 Apni Live Situation Chunein (Action Alert ke liye):",
+            [
+                "1. ⚠️ Option Trap & Live Time Alert (Entry se pehle)",
+                "2. 🎯 Live Trailing SL Step-Guide (Trade chalne ke baad)",
+                "3. 🧊 15-Min Cooling-Off Lock & Daily Kill-Switch (Loss hone par)",
+                "4. 📊 Drawdown Recovery Meter & Trade Excel Download"
+            ]
+        )
+
+        st.markdown("---")
+
+        # --- FEATURE 1: OPTION TRAP & LIVE TIME ALERT ---
+        if shield_mode.startswith("1."):
+            now_ist = datetime.now(IST)
+            curr_time = now_ist.strftime("%I:%M %p")
+            st.info(f"🕒 Abhi ka Live Time (IST): **{curr_time}**")
+
+            t_col1, t_col2 = st.columns(2)
+            with t_col1:
+                day_type = st.selectbox("Aaj ka Din:", ["Normal Day", "Expiry Day (Hero-Zero Trap)"])
+            with t_col2:
+                strike_type = st.selectbox("Aapka Strike:", ["ITM (In The Money)", "ATM (At The Money)", "OTM (Out of The Money - Sasta)"])
+
+            # Time Trap Check
+            hr, mn = now_ist.hour, now_ist.minute
+            if (hr == 9 and mn < 30):
+                st.warning("🚨 **TIME ALERT (9:15 - 9:30 AM):** Opening Volatility Trap! Pehle 15 minute market ko settle hone dein.")
+            elif (hr == 11 and mn >= 30) or (hr == 12) or (hr == 13 and mn <= 30):
+                st.error("🚨 **LUNCH TIME TRAP (11:30 AM - 1:30 PM):** Market sideways aur Theta Decay tez hota hai. Naya Option Buy AVOID karein!")
+            else:
+                st.success("✅ **TIME SAFE:** Market momentum window active hai.")
+
+            # Strike & Expiry Check
+            if day_type.startswith("Expiry") and strike_type.startswith("OTM"):
+                st.error("🛑 **BIG TRAP ALERT:** Expiry Day par OTM Option 90% time ZERO ho jata hai! Turant cancel karein aur sirf **ITM ya ATM** chunein.")
+            elif strike_type.startswith("OTM"):
+                st.warning("⚠️ **CAUTION:** OTM mein Theta Decay zyada hota hai. Safe trading ke liye ATM/ITM best hai.")
+            else:
+                st.success("🟢 **GREEN SIGNAL:** Aapka Strike safe hai. Apne pre-marked Zone par strict SL ke sath trade lein!")
+
+        # --- FEATURE 2: LIVE TRAILING SL STEP-GUIDE ---
+        elif shield_mode.startswith("2."):
+            st.markdown("**Trade mein ghusne ke baad Darr aur Lalach khatam karne ka Action Plan:**")
+            tr1, tr2 = st.columns(2)
+            with tr1:
+                t_buy = st.number_input("Option Buy Price (₹):", min_value=1.0, value=200.0, step=5.0, key="tr_buy")
+            with tr2:
+                t_sl = st.number_input("Stop Loss Points:", min_value=1.0, value=20.0, step=1.0, key="tr_sl")
+
+            sl_price = t_buy - t_sl
+            step1_price = t_buy + t_sl          # 1:1
+            step2_price = t_buy + (t_sl * 1.5)  # 1:1.5
+            final_tgt = t_buy + (t_sl * 2.0)    # 1:2
+
+            st.error(f"🛑 **Hard Stop Loss:** ₹{sl_price:.1f} (Iske niche 1 second bhi nahi rukna hai!)")
+            st.info(f"🔹 **Step 1 (Price ₹{step1_price:.1f} aane par - 1:1):** Apna SL uthakar **Buy Price (₹{t_buy:.1f})** par le aayein. Ab aapka Loss ZERO!")
+            st.warning(f"🔸 **Step 2 (Price ₹{step2_price:.1f} aane par - 1:1.5):** **50% Quantity Book** karein aur baki ka SL ₹{step1_price:.1f} par trail karein.")
+            st.success(f"🏆 **Step 3 (Final Target ₹{final_tgt:.1f} - 1:2):** Poora Profit book karein aur screen se door hat jayein!")
+
+        # --- FEATURE 3: 15-MIN COOLING-OFF LOCK & DAILY KILL-SWITCH ---
+        elif shield_mode.startswith("3."):
+            k1, k2 = st.columns(2)
+            with k1:
+                max_daily_loss = st.number_input("Aaj ki Max Loss Limit (₹):", min_value=500, value=2000, step=500)
+                curr_loss = st.number_input("Abhi tak ka Total Loss (₹):", min_value=0, value=0, step=100)
+            with k2:
+                trades_done = st.number_input("Aaj kitne Trades ho chuke hain?", min_value=0, max_value=10, value=0, step=1)
+
+            if curr_loss >= max_daily_loss or trades_done >= 3:
+                st.error("🚨🛑 **DAILY KILL-SWITCH ACTIVATED! AAJ KI DUKAAN BAND!** 🛑🚨\n\nAapki aaj ki Loss Limit ya 3 Trades ki limit poori ho chuki hai. Broker terminal turant **LOGOUT** karein. Ab jo bhi trade lengi woh Revenge Trade hoga!")
+            else:
+                st.success(f"✅ Aap abhi safe limit mein hain (Bache huye trades: {3 - trades_done}).")
+
+            st.markdown("**Agar abhi-abhi SL Hit hua hai, to Revenge se bachne ke liye 15-Min Lock on karein:**")
+            components.html("""
+            <div style="background:#FFEBEE; border:2px solid #C62828; border-radius:12px; padding:14px; text-align:center; font-family:sans-serif;">
+                <div id="coolTimer" style="font-size:28px; font-weight:900; color:#B71C1C; margin-bottom:8px;">🧊 15:00</div>
+                <button onclick="startCool()" style="background:#C62828; color:white; border:none; border-radius:8px; padding:10px 20px; font-size:16px; font-weight:bold; cursor:pointer;">
+                    🚨 SL Hit Hua — Start 15-Min Cooling Lock
+                </button>
+                <p id="coolMsg" style="color:#880E4F; font-weight:bold; margin:8px 0 0 0; font-size:14px;">
+                    Click karte hi 15 minute tak chart mat dekhein, paani piyen aur shant ho jayein.
+                </p>
+            </div>
+            <script>
+            let coolInt;
+            function startCool() {
+                clearInterval(coolInt);
+                let sec = 900;
+                document.getElementById('coolMsg').innerText = "🛑 LOCK ACTIVE! 15 minute tak koi naya order mat lagayein!";
+                coolInt = setInterval(() => {
+                    sec--;
+                    let m = String(Math.floor(sec / 60)).padStart(2, '0');
+                    let s = String(sec % 60).padStart(2, '0');
+                    document.getElementById('coolTimer').innerText = "🧊 " + m + ":" + s;
+                    if (sec <= 0) {
+                        clearInterval(coolInt);
+                        document.getElementById('coolTimer').innerText = "✅ 00:00 (Mind Calm!)";
+                        document.getElementById('coolMsg').innerText = "Ab aap shant dimaag se naya setup dekh sakti hain.";
+                    }
+                }, 1000);
+            }
+            </script>
+            """, height=155)
+
+        # --- FEATURE 4: DRAWDOWN RECOVERY METER & EXCEL DOWNLOAD ---
+        elif shield_mode.startswith("4."):
+            st.markdown("**📉 Capital Recovery Math (Drawdown Meter):**")
+            r1, r2 = st.columns(2)
+            with r1:
+                total_cap = st.number_input("Total Trading Capital (₹):", min_value=1000, value=50000, step=5000)
+            with r2:
+                lost_cap = st.number_input("Abhi tak ka Loss (₹):", min_value=0, value=5000, step=500)
+
+            if lost_cap >= total_cap:
+                st.error("🚨 Capital khatam ho chuka hai! Pehle paper trading se practice karein.")
+            elif lost_cap > 0:
+                rem_cap = total_cap - lost_cap
+                loss_pct = (lost_cap / total_cap) * 100
+                req_profit_pct = (lost_cap / rem_cap) * 100
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Capital Loss %", f"{loss_pct:.1f}%")
+                m2.metric("Recovery ke liye Profit %", f"{req_profit_pct:.1f}%")
+                m3.metric("Bacha hua Capital", f"₹{rem_cap}")
+                if loss_pct >= 20:
+                    st.error("⚠️ **ALERT:** 20% se zyada Drawdown hai! Agle 5 trades mein apni **Quantity AADHI (50%)** kar dein.")
+                else:
+                    st.info("✅ Normal Drawdown hai. Apne fix Lot Size aur rules par tike rahein.")
+            else:
+                st.success("🌟 Zero Loss! Aapka poora capital safe hai.")
+
+            st.markdown("---")
+            st.markdown("**📥 Aaj ka Trade Report Excel (CSV) Download Karein:**")
+            csv_buf = io.StringIO()
+            writer = csv.writer(csv_buf)
+            writer.writerow(["Date", "Total Capital", "Loss", "Discipline Score", "Status"])
+            writer.writerow([datetime.now(IST).strftime("%d-%m-%Y"), total_cap, lost_cap, "100%", "Rules Followed"])
+            st.download_button(
+                label="💾 Download Today's Shield Report (Excel/CSV)",
+                data=csv_buf.getvalue(),
+                file_name=f"Pritika_Shield_Report_{datetime.now(IST).strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
