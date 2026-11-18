@@ -342,6 +342,115 @@ updateMarketRadar();
 setInterval(updateMarketRadar, 1000);
 </script>
 """, height=245)
+
+# ==============================================================================
+# 🌍 WORLD & INDIAN CAPITAL MARKET FLASH NEWS + IMPACT ANALYZER
+# ==============================================================================
+import urllib.request
+import xml.etree.ElementTree as ET
+
+@st.cache_data(ttl=300)
+def fetch_live_market_news():
+    feeds = [
+        ("🇮🇳 INDIA", "https://news.google.com/rss/search?q=Nifty+OR+Sensex+OR+RBI+OR+SEBI+OR+FII+stock+market+India&hl=en-IN&gl=IN&ceid=IN:en"),
+        ("🌍 WORLD", "https://news.google.com/rss/search?q=US+Fed+OR+Powell+OR+CPI+inflation+OR+Crude+Oil+OR+Wall+Street+OR+Gold+market&hl=en-IN&gl=IN&ceid=IN:en")
+    ]
+    news_list = []
+    bearish_kw = ["crash", "fall", "drop", "war", "attack", "rate hike", "hike", "inflation", "recession", "selloff", "sell-off", "plunge", "tariff", "tension", "slump", "tumble", "fear", "crisis"]
+    bullish_kw = ["rally", "surge", "jump", "rate cut", "cut", "record high", "boom", "gain", "soar", "easing", "bull", "positive", "stimulus", "deal"]
+    volatile_kw = ["fed", "fomc", "rbi", "cpi", "gdp", "powell", "sebi", "budget", "crude", "oil", "policy", "trump", "yield", "dollar"]
+
+    for tag, url in feeds:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                root = ET.fromstring(resp.read())
+                for item in root.findall("./channel/item")[:5]:
+                    title = item.find("title").text if item.find("title") is not None else ""
+                    link = item.find("link").text if item.find("link") is not None else ""
+                    pub = item.find("pubDate").text if item.find("pubDate") is not None else ""
+                    t_low = title.lower()
+
+                    if any(k in t_low for k in bearish_kw):
+                        impact = "🔴 BEARISH / DANGER"
+                        effect = "Market mein girawat ya selling pressure aa sakta hai! Call (CE) mein jaldbaazi na karein aur SL tight rakhein."
+                        color = "#B71C1C"
+                        bg = "#FFEBEE"
+                        priority = 1
+                    elif any(k in t_low for k in bullish_kw):
+                        impact = "🟢 BULLISH / POSITIVE"
+                        effect = "Market mein tezi (buying) aa sakti hai! Put (PE) mein trap hone se bachein aur Trend ke sath chalein."
+                        color = "#1B5E20"
+                        bg = "#E8F5E9"
+                        priority = 2
+                    elif any(k in t_low for k in volatile_kw):
+                        impact = "⚡ HIGH VOLATILITY EVENT"
+                        effect = "Bada data/event hai! Dono taraf tez jhatke (SL Hunting) lag sakte hain — Half Quantity ya Wait karein."
+                        color = "#E65100"
+                        bg = "#FFF3E0"
+                        priority = 1
+                    else:
+                        impact = "🔵 MARKET UPDATE"
+                        effect = "Normal khabar hai — apne pre-marked levels aur Stage 2 rules par dhyan dein."
+                        color = "#0D47A1"
+                        bg = "#E3F2FD"
+                        priority = 3
+
+                    news_list.append({
+                        "tag": tag, "title": title, "link": link, "pub": pub[:22],
+                        "impact": impact, "effect": effect, "color": color, "bg": bg, "priority": priority
+                    })
+        except Exception:
+            pass
+
+    news_list.sort(key=lambda x: x["priority"])
+    return news_list
+
+live_news = fetch_live_market_news()
+
+# --- TOP BREAKING FLASH BANNER (Sabse Badi Impact News Turant Flash Hogi) ---
+if live_news:
+    top_n = live_news[0]
+    st.markdown(f"""
+    <div style="background: {top_n['bg']}; border: 3px solid {top_n['color']}; border-left: 10px solid {top_n['color']}; border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; box-shadow: 0px 4px 12px rgba(0,0,0,0.15);">
+        <div style="font-size: 13px; font-weight: 900; color: {top_n['color']}; letter-spacing: 0.5px;">
+            🚨 FLASH NEWS ALERT ({top_n['tag']}) — {top_n['impact']}
+        </div>
+        <div style="font-size: 16px; font-weight: 800; color: #111111; margin: 4px 0;">
+            {top_n['title']}
+        </div>
+        <div style="font-size: 14px; font-weight: 700; color: {top_n['color']};">
+            👉 Market Effect: {top_n['effect']}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with st.expander("🌍 LIVE WORLD & INDIAN MARKET NEWS RADAR (Click to View All + Forex Factory)", expanded=False):
+    nc1, nc2 = st.columns(2)
+    with nc1:
+        if st.button("🔄 Refresh Live News"):
+            fetch_live_market_news.clear()
+            st.rerun()
+    with nc2:
+        st.link_button("📅 Open Forex Factory (Red Folder Data)", "https://www.forexfactory.com/calendar", use_container_width=True)
+
+    if not live_news:
+        st.warning("Abhi live news load nahi ho pa rahi hai. Thodi der baad Refresh karein.")
+    else:
+        for n in live_news[:8]:
+            st.markdown(f"""
+            <div style="background: {n['bg']}; border-left: 6px solid {n['color']}; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px;">
+                <div style="font-size: 12px; font-weight: 900; color: {n['color']};">
+                    {n['tag']} | {n['impact']} <span style="color:#555; font-weight:600;">({n['pub']})</span>
+                </div>
+                <div style="font-size: 15px; font-weight: 800; color: #111; margin: 3px 0;">
+                    <a href="{n['link']}" target="_blank" style="color: #111; text-decoration: none;">{n['title']} ↗</a>
+                </div>
+                <div style="font-size: 13px; font-weight: 700; color: {n['color']};">
+                    🎯 Effect: {n['effect']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 # ==========================================
 # MAIN APP TITLE & GEETA MAHAMANTRAS
 # ==========================================
