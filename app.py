@@ -193,6 +193,155 @@ else:
             st.session_state.saved_pass = ""
             st.rerun()
 
+# ==============================================================================
+# 🕒 LIVE IST CLOCK + CURRENT PHASE + NEXT PHASE COUNTDOWN ALERT (TOP BANNER)
+# ==============================================================================
+components.html("""
+<div id="liveAlertBox" style="background: linear-gradient(90deg, #0D47A1, #1565C0); color: white; padding: 14px 18px; border-radius: 14px; border: 3px solid #FFD700; font-family: sans-serif; box-shadow: 0px 4px 14px rgba(0,0,0,0.25); margin-bottom: 6px;">
+    
+    <!-- Top Row: Live Clock -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 8px; margin-bottom: 10px;">
+        <span style="font-size: 16px; font-weight: 900; color: #FFD700;">🕒 LIVE MARKET RADAR (IST)</span>
+        <span id="istClock" style="font-size: 20px; font-weight: 900; background: #00000066; padding: 4px 12px; border-radius: 8px; color: #FFFFFF; letter-spacing: 1px;">--:--:--</span>
+    </div>
+
+    <!-- Current Phase -->
+    <div style="background: rgba(0,0,0,0.25); padding: 10px 12px; border-radius: 10px; margin-bottom: 10px;">
+        <div style="font-size: 12px; font-weight: 800; color: #FFD700; text-transform: uppercase; letter-spacing: 0.5px;">🔴 ABHI CHAL RAHA HAI (CURRENT PHASE):</div>
+        <div id="currTitle" style="font-size: 17px; font-weight: 900; margin: 3px 0;">Loading...</div>
+        <div id="currAction" style="font-size: 14px; font-weight: 600; line-height: 1.4; color: #F5F5F5;">Checking live market time...</div>
+    </div>
+
+    <!-- Next Phase + Countdown -->
+    <div style="background: rgba(255,255,255,0.14); padding: 10px 12px; border-radius: 10px; border-left: 5px solid #FFD700;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;">
+            <span style="font-size: 12px; font-weight: 900; color: #FFEB3B;">⏭️ AGLA PHASE AANE WALA HAI:</span>
+            <span id="nextCountdown" style="font-size: 15px; font-weight: 900; background: #FFD700; color: #000000; padding: 3px 10px; border-radius: 6px;">⏳ --:--</span>
+        </div>
+        <div id="nextTitle" style="font-size: 15px; font-weight: 800; color: #FFFFFF;">Loading next phase...</div>
+        <div id="nextAction" style="font-size: 13px; font-weight: 600; color: #E0F7FA; margin-top: 2px;">...</div>
+    </div>
+
+</div>
+
+<script>
+const PHASES = [
+    {
+        start: 9*60, end: 9*60+15,
+        bg: "linear-gradient(90deg, #E65100, #F57C00)",
+        title: "🔔 9:07 AM — Pre-Open Setup",
+        action: "👀 Market ka sentiment dekhein aur Gap-Up / Gap-Down note karein. Abhi koi order mat lagayein."
+    },
+    {
+        start: 9*60+15, end: 9*60+45,
+        bg: "linear-gradient(90deg, #B71C1C, #D32F2F)",
+        title: "🚨 9:15 – 9:45 AM — High Volatility (Trap Zone)",
+        action: "🛑 WARNING: Retailers ko trap kiya jata hai! Trading AVOID karein, sirf Intraday High/Low levels mark karein."
+    },
+    {
+        start: 9*60+45, end: 10*60+30,
+        bg: "linear-gradient(90deg, #1B5E20, #2E7D32)",
+        title: "🚀 9:45 – 10:30 AM — Trend Initiation (Asli Move)",
+        action: "✅ Confirmation ka wait karein aur Trend ki disha mein apne Zone par entry lein."
+    },
+    {
+        start: 10*60+30, end: 11*60+30,
+        bg: "linear-gradient(90deg, #00695C, #00897B)",
+        title: "📈 10:30 – 11:30 AM — Trend Continuation",
+        action: "🎯 Profit mein hain to SL trail karein. Naye trade ke liye sirf clean pullback ka wait karein."
+    },
+    {
+        start: 11*60+30, end: 12*60+30,
+        bg: "linear-gradient(90deg, #AD1457, #C2185B)",
+        title: "⚠️ 11:30 AM – 12:30 PM — Sideways & Low Volume",
+        action: "🛑 Overtrading AVOID karein! Partial profit book karein aur sirf market ko observe karein."
+    },
+    {
+        start: 12*60+30, end: 12*60+45,
+        bg: "linear-gradient(90deg, #FF6F00, #FFA000)",
+        title: "⚡ 12:30 – 12:45 PM — Breakout Window",
+        action: "👀 Consolidation se tez Breakout aa sakta hai! Chart aur Volume par poori nazar rakhein."
+    },
+    {
+        start: 12*60+45, end: 13*60+15,
+        bg: "linear-gradient(90deg, #37474F, #546E7A)",
+        title: "⏳ 12:45 – 1:15 PM — Mid-Day Wait Zone",
+        action: "📌 Breakout sustain ho raha hai ya fake hai check karein. Bina confirmation entry na lein."
+    },
+    {
+        start: 13*60+15, end: 14*60,
+        bg: "linear-gradient(90deg, #4A148C, #7B1FA2)",
+        title: "🔄 1:15 – 2:00 PM — Reversal Phase",
+        action: "💡 Subah ka trend palat sakta hai! Counter-trend ya Retracement trades ke liye yeh best time hai."
+    },
+    {
+        start: 14*60, end: 14*60+30,
+        bg: "linear-gradient(90deg, #1565C0, #1976D2)",
+        title: "📊 2:00 – 2:30 PM — Pre-Closing Setup",
+        action: "👀 Aakhri ghante ke bade move ke liye apne levels aur positions check kar lein."
+    },
+    {
+        start: 14*60+30, end: 15*60+30,
+        bg: "linear-gradient(90deg, #BF360C, #E64A19)",
+        title: "🔥 2:30 – 3:30 PM — Volatile Close (FII/DII Moves)",
+        action: "💰 Bade players active hain! SL tight trail karein aur apna Profit Book karke dukaan band karein."
+    }
+];
+
+function formatCountdown(sec) {
+    if (sec < 0) sec = 0;
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `⏳ ${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s mein`;
+    return `⏳ ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s mein`;
+}
+
+function updateMarketRadar() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+
+    const hh = ist.getHours(), mm = ist.getMinutes(), ss = ist.getSeconds();
+    const nowMin = hh * 60 + mm;
+    const nowSec = hh * 3600 + mm * 60 + ss;
+
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    document.getElementById('istClock').innerText =
+        `${String(hh % 12 || 12).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')} ${ampm}`;
+
+    const box = document.getElementById('liveAlertBox');
+    let idx = PHASES.findIndex(p => nowMin >= p.start && nowMin < p.end);
+
+    if (idx !== -1) {
+        const curr = PHASES[idx];
+        const next = (idx + 1 < PHASES.length) ? PHASES[idx + 1] : {
+            title: "🌙 3:30 PM — Market Closed",
+            action: "📚 Din ki trading khatam! Apni Trade Diary aur galtiyan review karein."
+        };
+        const remSec = (curr.end * 60) - nowSec;
+
+        box.style.background = curr.bg;
+        document.getElementById('currTitle').innerText = curr.title;
+        document.getElementById('currAction').innerText = curr.action;
+        document.getElementById('nextTitle').innerText = next.title;
+        document.getElementById('nextAction').innerText = "Taiyari: " + next.action;
+        document.getElementById('nextCountdown').innerText = formatCountdown(remSec);
+    } else {
+        box.style.background = "linear-gradient(90deg, #263238, #37474F)";
+        document.getElementById('currTitle').innerText = "🌙 Market Closed — Homework & Revision Time";
+        document.getElementById('currAction').innerText = "📚 Aaj ki diary review karein aur kal ke liye Stage 1 (Pre-Market) ki taiyari karein.";
+        document.getElementById('nextTitle').innerText = PHASES[0].title;
+        document.getElementById('nextAction').innerText = "Agli Taiyari: " + PHASES[0].action;
+
+        let remSec = (nowMin < 9*60) ? (9*3600 - nowSec) : ((24*3600 - nowSec) + 9*3600);
+        document.getElementById('nextCountdown').innerText = formatCountdown(remSec);
+    }
+}
+updateMarketRadar();
+setInterval(updateMarketRadar, 1000);
+</script>
+""", height=245)
 # ==========================================
 # MAIN APP TITLE & GEETA MAHAMANTRAS
 # ==========================================
