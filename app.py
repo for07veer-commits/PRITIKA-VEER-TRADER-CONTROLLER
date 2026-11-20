@@ -59,12 +59,21 @@ div[data-testid="stForm"] {
 </style>
 """, unsafe_allow_html=True)
 
+import hashlib
+import time
+
 # ==============================================================================
-# 🔒 SMART 4-DIGIT PASSWORD, VALIDITY & STAGE-LIMIT ADMIN SYSTEM
+# 🔒 UPGRADED SECURITY, USER ID TRACKER, LIVE MEMBER COUNTER & SEBI COMPLIANCE
 # ==============================================================================
-DEFAULT_ADMIN_PASS = "7777"
 DB_FILE = "tracker_access_db.json"
 IST = timezone(timedelta(hours=5, minutes=30))
+
+# Admin password ko Streamlit Secrets se uthayein (GitHub par password nahi dikhega)
+# Streamlit Cloud -> App Settings -> Secrets mein dalein: ADMIN_PASSWORD = "aapka_strong_password"
+ADMIN_SECRET = st.secrets.get("ADMIN_PASSWORD", "7777")
+
+def hash_pin(pin_str):
+    return hashlib.sha256(str(pin_str).strip().encode()).hexdigest()
 
 @st.cache_resource
 def get_memory_db():
@@ -74,7 +83,12 @@ def get_memory_db():
                 return json.load(f)
         except Exception:
             pass
-    return {"admin_pass": DEFAULT_ADMIN_PASS, "pins": {}}
+    return {"admin_hash": hash_pin(ADMIN_SECRET), "pins": {}}
+
+@st.cache_resource
+def get_active_sessions():
+    # Live users track karne ke liye shared dictionary: {user_id: last_active_timestamp}
+    return {}
 
 def save_db(db):
     try:
@@ -83,51 +97,126 @@ def save_db(db):
     except Exception:
         pass
 
+def update_and_count_live_users(user_id):
+    sessions = get_active_sessions()
+    now_ts = time.time()
+    # 15 minute se zyada inactive users ko hata dein
+    expired = [uid for uid, ts in sessions.items() if now_ts - ts > 900]
+    for uid in expired:
+        del sessions[uid]
+    if user_id:
+        sessions[user_id] = now_ts
+    return len(sessions), list(sessions.keys())
+
 db = get_memory_db()
+
+# Brute-force lock state
+if "failed_attempts" not in st.session_state:
+    st.session_state.failed_attempts = 0
+if "lock_until" not in st.session_state:
+    st.session_state.lock_until = 0
+if "sebi_accepted" not in st.session_state:
+    st.session_state.sebi_accepted = False
+if "saved_pass" not in st.session_state:
+    st.session_state.saved_pass = ""
 
 def verify_pin(user_input):
     pin = str(user_input).strip()
     if not pin:
-        return False, "", False, []
+        return False, "", False, [], ""
     
-    if pin == db.get("admin_pass", DEFAULT_ADMIN_PASS):
-        return True, "👑 Admin Mode Active (All Stages Unlocked)", True, ["1", "1.5", "2", "3", "4", "5"]
+    # 1. Admin Check (Hashed)
+    if hash_pin(pin) == db.get("admin_hash", hash_pin(ADMIN_SECRET)) or pin == ADMIN_SECRET:
+        return True, "👑 Admin Mode Active (All Stages Unlocked)", True, ["1", "1.5", "2", "3", "4", "5"], "ADMIN-PRITIKA"
     
+    # 2. User PIN Check
     pins_data = db.get("pins", {})
-    if pin in pins_data:
-        info = pins_data[pin]
+    pin_h = hash_pin(pin)
+    
+    # Support both hashed & old plain PINs
+    info = pins_data.get(pin_h) or pins_data.get(pin)
+    if info:
         exp_time = datetime.strptime(info["expiry"], "%Y-%m-%d %H:%M")
         now_ist = datetime.now(IST).replace(tzinfo=None)
         if now_ist > exp_time:
-            return False, "⏳ Aapka 4-Digit PIN Expire ho chuka hai! Renew karne ke liye Pritika ji se sampark karein.", False, []
+            return False, "⏳ Aapka Access PIN Expire ho chuka hai! Renew karne ke liye Admin se sampark karein.", False, [], ""
         allowed = info["stages"]
+        uid = info.get("user_id", f"USER-{pin[-4:]}")
         stages_text = ", ".join([f"Stage {s}" for s in allowed])
-        return True, f"✅ Active ({stages_text}) | Valid Till: {exp_time.strftime('%d %b %Y, %I:%M %p')}", False, allowed
-    
-    return False, "❌ Galat 4-Digit PIN! Kripya sahi password dalein.", False, []
+        return True, f"✅ Active ({stages_text}) | Valid Till: {exp_time.strftime('%d %b %Y, %I:%M %p')}", False, allowed, uid
+        
+    return False, "❌ Galat Password / PIN! Kripya sahi password dalein.", False, [], ""
 
-if "saved_pass" not in st.session_state:
-    st.session_state.saved_pass = ""
+is_valid, status_msg, is_admin, allowed_stages, current_user_id = verify_pin(st.session_state.saved_pass)
 
-is_valid, status_msg, is_admin, allowed_stages = verify_pin(st.session_state.saved_pass)
-
-# --- LOGIN SCREEN ---
+# --- LOGIN SCREEN WITH SEBI DISCLAIMER & BRUTE-FORCE LOCK ---
 if not is_valid:
     st.markdown("""
     <div style="text-align: center; background: linear-gradient(90deg, #004D40, #1B5E20, #2E7D32); padding: 18px; border-radius: 15px; border: 3px solid #FFD700; margin-bottom: 18px;">
         <h1 style="color: #FFD700; font-size: 34px; font-weight: 900; margin: 0;">🔒 Pritika's Pro Trading Tracker</h1>
     </div>
     """, unsafe_allow_html=True)
-    st.info("🔑 App kholne ke liye apna **4-Digit Password** dalein (Admin Default: **7777**).")
-    input_pass = st.text_input("Enter 4-Digit Password:", type="password", max_chars=20, placeholder="Example: 7777")
-    if st.button("🔓 Unlock App"):
-        ok, msg, adm, stg = verify_pin(input_pass)
-        if ok:
-            st.session_state.saved_pass = input_pass.strip()
-            st.rerun()
+
+    # SEBI Mandatory Disclaimer Box on Login
+    st.markdown("""
+    <div style="background: #FFF8E1; border: 2px solid #FF8F00; border-left: 8px solid #E65100; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+        <h4 style="color: #BF360C; margin: 0 0 6px 0;">⚖️ SEBI COMPLIANCE & RISK DISCLOSURE</h4>
+        <p style="color: #333; font-size: 13.5px; margin: 0; line-height: 1.5;">
+            1. <b>Not a SEBI Registered Advisor:</b> Yeh terminal sirf <b>Educational, Trading Discipline aur Risk Management</b> ke liye banaya gaya hai. Yahan koi bhi Buy/Sell tips, calls, ya investment advice nahi di jati.<br>
+            2. <b>SEBI Derivatives Risk Warning:</b> SEBI study ke anusar, 9 out of 10 individual traders in equity Futures & Options (F&O) segment incur net losses.<br>
+            3. <b>User Responsibility:</b> Kisi bhi trade ka profit ya loss poori tarah user ki apni zimmedari hogi. Trade lene se pehle apne SEBI-registered Financial Advisor se salah lein.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    agree_sebi = st.checkbox("✅ Maine SEBI Risk Disclosure padh liya hai aur main samajhta/samajhti hoon ki yeh sirf ek Discipline & Educational Tool hai.")
+
+    # Lockout check
+    now_t = time.time()
+    if now_t < st.session_state.lock_until:
+        rem = int(st.session_state.lock_until - now_t)
+        st.error(f"🚫 Bahut zyada galat attempts! Security ke liye login **{rem} seconds** ke liye lock hai.")
+        st.stop()
+
+    st.info("🔑 App kholne ke liye apna **Authorized Access PIN** dalein.")
+    input_pass = st.text_input("Enter Access PIN / Password:", type="password", max_chars=20, placeholder="Apna PIN dalein...")
+
+    if st.button("🔓 Unlock Terminal"):
+        if not agree_sebi:
+            st.warning("⚠️ Aage badhne ke liye upar SEBI Risk Disclosure box par tick karein.")
         else:
-            st.error(msg)
+            ok, msg, adm, stg, uid = verify_pin(input_pass)
+            if ok:
+                st.session_state.failed_attempts = 0
+                st.session_state.saved_pass = input_pass.strip()
+                st.session_state.sebi_accepted = True
+                st.rerun()
+            else:
+                st.session_state.failed_attempts += 1
+                if st.session_state.failed_attempts >= 5:
+                    st.session_state.lock_until = time.time() + 120  # 2-minute lock
+                    st.error("🚫 5 baar galat PIN! Terminal 2 minute ke liye lock ho gaya hai.")
+                else:
+                    st.error(f"{msg} (Bache hue attempts: {5 - st.session_state.failed_attempts})")
     st.stop()
+
+# --- LIVE USER TRACKING & TOTAL MEMBERS BAR ---
+live_count, live_user_list = update_and_count_live_users(current_user_id)
+total_registered = len(db.get("pins", {})) + 1  # +1 for Admin
+
+st.markdown(f"""
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+            background: linear-gradient(90deg, #1A237E, #283593); color: white; padding: 10px 16px;
+            border-radius: 12px; border: 2px solid #FFD700; margin-bottom: 12px; font-family: sans-serif;">
+    <div style="font-size: 15px; font-weight: 800;">
+        🆔 ACTIVE TERMINAL ID: <span style="background: #FFD700; color: #000; padding: 3px 10px; border-radius: 6px;">{current_user_id}</span>
+    </div>
+    <div style="font-size: 14px; font-weight: 700;">
+        🟢 Live Now: <span style="color: #69F0AE; font-size: 16px;">{live_count}</span> &nbsp;|&nbsp;
+        👥 Total Members: <span style="color: #FFD700; font-size: 16px;">{total_registered}</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # --- TOP ADMIN BAR ---
 if is_admin:
@@ -137,20 +226,25 @@ if is_admin:
     with col_admin:
         admin_box = st.popover("👑 Admin", use_container_width=True) if hasattr(st, "popover") else st.expander("👑 Admin")
         with admin_box:
-            st.markdown("### ⚡ 4-Digit Password Banayein")
-            plan = st.radio("1. Plan Validity:", ["1 Day (24 Hours)", "1 Month (30 Days)", "1 Year (365 Days)"])
-            st.markdown("**2. Stages Select Karein:**")
+            st.markdown(f"**🟢 Currently Online ({live_count}):** `{', '.join(live_user_list)}`")
+            st.markdown("---")
+            st.markdown("### ⚡ Naya Member ID & PIN Banayein")
+            member_id = st.text_input("1. Member Name / ID:", placeholder="Ex: TRADER-RAHUL-01")
+            plan = st.radio("2. Plan Validity:", ["1 Day (24 Hours)", "1 Month (30 Days)", "1 Year (365 Days)"])
+            st.markdown("**3. Stages Select Karein:**")
             st_s1 = st.checkbox("Stage 1: Pre-Market", value=True, key="adm_s1")
             st_s15 = st.checkbox("Stage 1.5: Master Power Summary", value=True, key="adm_s15")
             st_s2 = st.checkbox("Stage 2: Live Market Rules", value=True, key="adm_s2")
             st_s3 = st.checkbox("Stage 3: Target Calculator", value=True, key="adm_s3")
             st_s4 = st.checkbox("Stage 4: Trade Diary", value=True, key="adm_s4")
             st_s5 = st.checkbox("Stage 5: Screen Recorder", value=True, key="adm_s5")
-            custom_pin = st.text_input("3. Custom 4-Digit PIN (Optional):", max_chars=4, placeholder="Ex: 4582")
+            custom_pin = st.text_input("4. Custom 4-Digit PIN (Optional):", max_chars=4, placeholder="Ex: 4582")
             selected_stages = [s for s, val in [("1", st_s1), ("1.5", st_s15), ("2", st_s2), ("3", st_s3), ("4", st_s4), ("5", st_s5)] if val]
-            
-            if st.button("🔑 Create 4-Digit Password"):
-                if not selected_stages:
+
+            if st.button("🔑 Create Member Access"):
+                if not member_id.strip():
+                    st.warning("Member ka Naam ya ID zaroor dalein!")
+                elif not selected_stages:
                     st.warning("Kam se kam 1 Stage select karein!")
                 elif custom_pin and (len(custom_pin) != 4 or not custom_pin.isdigit()):
                     st.warning("Sirf 4 digits ka number dalein!")
@@ -158,12 +252,17 @@ if is_admin:
                     new_pin = custom_pin if custom_pin else str(random.randint(1000, 9999))
                     days_map = {"1 Day (24 Hours)": 1, "1 Month (30 Days)": 30, "1 Year (365 Days)": 365}
                     exp_dt = datetime.now(IST).replace(tzinfo=None) + timedelta(days=days_map[plan])
-                    db["pins"][new_pin] = {"expiry": exp_dt.strftime("%Y-%m-%d %H:%M"), "stages": selected_stages, "plan": plan}
+                    db["pins"][hash_pin(new_pin)] = {
+                        "user_id": member_id.strip().upper(),
+                        "expiry": exp_dt.strftime("%Y-%m-%d %H:%M"),
+                        "stages": selected_stages,
+                        "plan": plan
+                    }
                     save_db(db)
                     stg_names = ", ".join([f"Stage {x}" for x in selected_stages])
-                    st.success(f"✅ Naya PIN: **{new_pin}**")
-                    st.code(f"📊 Pritika's Pro Trading Tracker\n🔑 Password: {new_pin}\n🔓 Access: {stg_names}\n⏳ Valid till {exp_dt.strftime('%d %b %Y, %I:%M %p')}", language="markdown")
-            
+                    st.success(f"✅ Member Created: **{member_id.strip().upper()}** | PIN: **{new_pin}**")
+                    st.code(f"📊 Pritika's Pro Trading Tracker\n🆔 User ID: {member_id.strip().upper()}\n🔑 PIN: {new_pin}\n🔓 Access: {stg_names}\n⏳ Valid till {exp_dt.strftime('%d %b %Y, %I:%M %p')}", language="markdown")
+
             if db.get("pins"):
                 st.markdown("---")
                 if st.button("🗑️ Clear All User Passwords"):
@@ -173,15 +272,19 @@ if is_admin:
 
             st.markdown("---")
             st.markdown("### ⚙️ Apna Admin Password Badlein")
-            new_admin_p = st.text_input("Naya Admin Password dalein:", placeholder="Ex: 9999")
+            new_admin_p = st.text_input("Naya Strong Admin Password:", type="password", placeholder="Ex: Pritika@2026")
             if st.button("💾 Save New Admin Password"):
-                if new_admin_p.strip():
-                    db["admin_pass"] = new_admin_p.strip()
+                if len(new_admin_p.strip()) >= 6:
+                    db["admin_hash"] = hash_pin(new_admin_p.strip())
                     save_db(db)
                     st.session_state.saved_pass = new_admin_p.strip()
-                    st.success("✅ Saved!")
+                    st.success("✅ Admin Password Securely Updated!")
+                else:
+                    st.warning("Security ke liye kam se kam 6 characters ka password rakhein.")
     with col_logout:
         if st.button("🚪 Logout"):
+            sessions = get_active_sessions()
+            sessions.pop(current_user_id, None)
             st.session_state.saved_pass = ""
             st.rerun()
 else:
@@ -190,9 +293,10 @@ else:
         st.info(status_msg)
     with col_logout:
         if st.button("🚪 Logout"):
+            sessions = get_active_sessions()
+            sessions.pop(current_user_id, None)
             st.session_state.saved_pass = ""
             st.rerun()
-
 # ==============================================================================
 # 🕒 LIVE IST CLOCK + CURRENT PHASE + NEXT PHASE COUNTDOWN ALERT (TOP BANNER)
 # ==============================================================================
@@ -983,3 +1087,15 @@ else:
                 file_name=f"Pritika_Shield_Report_{datetime.now(IST).strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
+# ==============================================================================
+# ⚖️ SEBI GUIDELINES & PERMANENT FOOTER DISCLAIMER
+# ==============================================================================
+st.markdown("---")
+st.markdown("""
+<div style="background: #F5F5F5; border-top: 3px solid #B71C1C; border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #333; line-height: 1.6;">
+    <b style="color: #B71C1C; font-size: 14px;">⚖️ SEBI MANDATORY DISCLAIMER & GUIDELINES:</b><br>
+    • <b>Educational Purpose Only:</b> Pritika's Pro Trading Tracker ek personal trading journal, checklist aur risk-management utility hai. Hum SEBI-registered Research Analyst (RA) ya Investment Advisor (IA) nahi hain.<br>
+    • <b>No Tips / No Guaranteed Returns:</b> Is app par dikhaya gaya koi bhi data, news radar, ya power note buy/sell recommendation nahi hai.<br>
+    • <b>SEBI F&O Risk Disclosure:</b> Derivatives trading mein high risk hota hai. SEBI ki report ke anusar 90% se zyada retail F&O traders loss karte hain. Apne risk appetite ke hisab se hi trade karein.
+</div>
+""", unsafe_allow_html=True)
