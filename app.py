@@ -75,22 +75,78 @@ ADMIN_SECRET = st.secrets.get("ADMIN_PASSWORD", "7777")
 def hash_pin(pin_str):
     return hashlib.sha256(str(pin_str).strip().encode()).hexdigest()
 
+import gspread
+from google.oauth2.service_account import Credentials
+
+# ==============================================================================
+# ☁️ PERMANENT GOOGLE SHEETS DATABASE CONNECTION
+# ==============================================================================
 @st.cache_resource
+def get_gsheet():
+    try:
+        if "gcp_service_account" not in st.secrets:
+            return None
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = Credentials.from_service_account_info(
+            dict(st.secrets["gcp_service_account"]), scopes=scopes
+        )
+        client = gspread.authorize(creds)
+        sheet_name = st.secrets.get("SHEET_NAME", "Pritika_Tracker_Members")
+        return client.open(sheet_name).sheet1
+    except Exception:
+        return None
+
 def get_memory_db():
+    data = {"admin_hash": hash_pin(ADMIN_SECRET), "pins": {}}
+    sheet = get_gsheet()
+    if sheet:
+        try:
+            records = sheet.get_all_records()
+            for row in records:
+                p_hash = str(row.get("pin_hash", "")).strip()
+                if p_hash:
+                    stages_raw = str(row.get("stages", "")).strip()
+                    stages_list = [s.strip() for s in stages_raw.split(",") if s.strip()]
+                    data["pins"][p_hash] = {
+                        "user_id": str(row.get("user_id", "")).strip(),
+                        "expiry": str(row.get("expiry", "")).strip(),
+                        "stages": stages_list,
+                        "plan": str(row.get("plan", "")).strip()
+                    }
+            return data
+        except Exception:
+            pass
+    # Fallback agar Google Sheet setup na ho
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
                 return json.load(f)
         except Exception:
             pass
-    return {"admin_hash": hash_pin(ADMIN_SECRET), "pins": {}}
-
-@st.cache_resource
-def get_active_sessions():
-    # Live users track karne ke liye shared dictionary: {user_id: last_active_timestamp}
-    return {}
+    return data
 
 def save_db(db):
+    # 1. Google Sheet mein permanent save karein
+    sheet = get_gsheet()
+    if sheet:
+        try:
+            rows = [["pin_hash", "user_id", "expiry", "stages", "plan"]]
+            for p_hash, info in db.get("pins", {}).items():
+                rows.append([
+                    p_hash,
+                    info.get("user_id", ""),
+                    info.get("expiry", ""),
+                    ",".join(info.get("stages", [])),
+                    info.get("plan", "")
+                ])
+            sheet.clear()
+            sheet.update(rows)
+        except Exception:
+            pass
+    # 2. Local backup bhi save rakhein
     try:
         with open(DB_FILE, "w") as f:
             json.dump(db, f)
