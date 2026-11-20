@@ -152,7 +152,9 @@ def save_db(db):
             json.dump(db, f)
     except Exception:
         pass
-
+@st.cache_resource
+def get_active_sessions():
+    return {}
 def update_and_count_live_users(user_id):
     sessions = get_active_sessions()
     now_ts = time.time()
