@@ -652,6 +652,7 @@ with col1:
 with col2:
     st.link_button("🔎 Open Veer Master Scanner", "https://trading-scanner--veer-crty7rxlsxven92q2buuiy.streamlit.app/", use_container_width=True)
     st.link_button("🌟 Open Market Breath Engine", "https://colab.research.google.com/drive/1ds5WtQaIqTkKUeqGPGXQSB9ZZLxmG_fk?usp=sharing", use_container_width=True)
+st.link_button("📚 Open Free Trading Library", "https://pritika-trading-library-yu7qomappqzchqwnqbuggrt.streamlit.app/", use_container_width=True)
 
 pm1 = pm2 = pm3 = pm4 = False
 lm1 = lm2 = lm3 = lm4 = False
